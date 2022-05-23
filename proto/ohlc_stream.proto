@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package ohlc_stream;
+
+// Interface exported by the server.
+service OhlcStream {
+  // A simple RPC.
+  rpc UpdateOhlc(Ohlc) returns (NotImplemented) {}
+
+  // A server-to-client streaming RPC.
+  rpc Subscribe(Code) returns (stream Ohlc) {}
+}
+
+message Ohlc {
+  string code = 1;
+  optional string timestamp = 2;
+  optional string symbol = 3;
+  optional string market = 4;
+  optional float open = 5;
+  optional float high = 6;
+  optional float low = 7;
+  optional float close = 8;
+  optional int32 volume = 9;
+  optional float dod = 10;
+  optional float step = 11;
+  optional int32 tick = 12;
+}
+
+message Code {
+  string code = 1;
+}
+
+message Empty {
+
+}
+
+message NotImplemented {
+  
+}
