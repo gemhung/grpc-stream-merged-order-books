@@ -1,36 +1,21 @@
-mod self_update;
-
-pub mod ohlc_stream {
-    tonic::include_proto!("ohlc_stream");
+pub mod orderbook {
+    tonic::include_proto!("orderbook");
 }
 
-use ohlc_stream::ohlc_stream_server::{OhlcStream, OhlcStreamServer};
-use ohlc_stream::{Code, NotImplemented, Ohlc};
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::sync::Arc;
+use orderbook::order_book_aggregator_server::{OrderBookAggregator, OrderBookAggregatorServer};
+use orderbook::{Empty, Summary};
 use structopt::StructOpt;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
-use tokio::sync::Mutex;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-use tracing::info;
-use tracing::warn;
-//use tonic::transport::ServerTlsConfig;
-//use tonic::transport::Identity;
+use tracing::*;
 
 #[derive(Clone)]
 pub struct Context {
-    map: Arc<Mutex<HashMap<String, broadcast::Sender<Ohlc>>>>,
-}
-
-impl Hash for Code {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.code.hash(state);
-    }
+    //orderbook: Arc<Mutex<HashMap<String, Summary>>,
+    broadcast: broadcast::Sender<Summary>,
 }
 
 #[derive(StructOpt, Debug)]
@@ -42,62 +27,59 @@ struct Opt {
 }
 
 #[tonic::async_trait]
-impl OhlcStream for Context {
-    async fn update_ohlc(
-        &self,
-        _request: Request<ohlc_stream::Ohlc>,
-    ) -> Result<Response<NotImplemented>, Status> {
+impl OrderBookAggregator for Context {
         /*
-        let ohlc = request.into_inner();
-        let mut map = self.map.lock().await;
-        if let Some(broadcast) = map.get(&ohlc.code) {
-            if let Err(err) = broadcast.send(ohlc) {
-                // all users are out, this message can never send to any
-                error!(?err);
-                // remove such code to save memory
-                map.remove(&err.0.code);
-            }
+    async fn push_summary(&self, request: Request<Summary>) -> Result<Response<Empty>, Status> {
+        let summary = request.into_inner();
+
+        if let Err(err) = self.broadcast.send(summary) {
+            error!(?err);
         }
+
+        Ok(Response::new(Empty::default()))
+    }
+    */
+
+    async fn push_summary(&self, request: Request<tonic::Streaming<Summary>>) -> Result<Response<Empty>, Status> {
+
+        let broadcast = self.broadcast.clone();
+        /*
+            do the merge here
         */
-        warn!("Not implemented");
-        Ok(Response::new(NotImplemented::default()))
+        tokio::spawn(async move {
+            let mut stream = request.into_inner();
+            while let Some(summary) = stream.message().await? {
+                if let Err(err) = broadcast.send(summary) {
+                    error!(?err);
+                    break;
+                }
+            }
+
+            Result::<_, anyhow::Error>::Ok(())
+        });
+
+        Ok(Response::new(Empty::default()))
     }
 
-    type SubscribeStream = UnboundedReceiverStream<Result<Ohlc, Status>>;
+    type BookSummaryStream = UnboundedReceiverStream<Result<Summary, Status>>;
 
-    async fn subscribe(
+    async fn book_summary(
         &self,
-        request: Request<Code>,
-    ) -> Result<Response<Self::SubscribeStream>, Status> {
-        let remote_addr = request.remote_addr();
-        let data = request.into_inner();
-        info!("{:?} subscribe {}", remote_addr, data.code);
-
-        let mut map = self.map.lock().await;
-        let (mut rx_broadcast, active_users_num) = match map.get(&data.code) {
-            Some(tx) => (tx.subscribe(), tx.receiver_count()),
-            None => {
-                let (tx, rx) = broadcast::channel(1000000);
-                map.insert(data.code.clone(), tx);
-                (rx, 1)
-            }
-        };
-
-        info!(
-            "code({:?}) has {} active users",
-            &data.code, active_users_num
-        );
-
-        drop(map);
+        request: Request<Empty>,
+    ) -> Result<Response<Self::BookSummaryStream>, Status> {
+        let remote_addr = request.remote_addr().unwrap().to_string();
+        info!("booking summary from {}", remote_addr);
 
         let (tx, rx) = mpsc::unbounded_channel();
+        let mut rx_broadcast = self.broadcast.subscribe();
+        // this is simply forwarding summary cause we cannot use tokio_stream::wrappers::BroadCastStream
         tokio::spawn(async move {
             loop {
                 if let Err(err) = rx_broadcast
                     .recv()
                     .await
                     .map_err(anyhow::Error::new)
-                    .and_then(|ohlc| tx.send(Ok(ohlc)).map_err(anyhow::Error::new))
+                    .and_then(|summary| tx.send(Ok(summary)).map_err(anyhow::Error::new))
                 {
                     warn!(?err);
                     break;
@@ -113,37 +95,38 @@ impl OhlcStream for Context {
 async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt().init();
 
-    //let cert = tokio::fs::read("../tls/server.pem").await?;
-    //let key = tokio::fs::read("../tls/server.key").await?;
-    //let identity = Identity::from_pem(cert, key);
-
     let opt = Opt::from_args();
     let addr = opt.addr.parse()?;
 
-    let context = Context {
-        map: Arc::new(Mutex::new(HashMap::default())),
-    };
+    let (tx, mut rx): (broadcast::Sender<Summary>, broadcast::Receiver<Summary>) =
+        broadcast::channel(100000);
+    let context = Context { broadcast: tx };
 
-    let update_handle = self_update::self_update(context.clone()); // cheap clone
+    let handle = tokio::spawn(async move {
+        while let Ok(_) = rx.recv().await.map_err(anyhow::Error::new) {
+            debug!("redundant loop don't care");
+        }
 
-    let svc = OhlcStreamServer::new(context);
+        info!("exit because sender is closed");
+        Result::<_, anyhow::Error>::Ok(())
+    });
+
+    let svc = OrderBookAggregatorServer::new(context);
     let five_seconds = std::time::Duration::new(5, 0);
 
-    info!("start with addr = {:?} ...", addr);
+    info!("running with addr = {:?} ...", addr);
 
     let server = Server::builder()
-        //.tls_config(ServerTlsConfig::new().identity(identity))?
         .tcp_keepalive(Some(five_seconds.clone()))
         .http2_keepalive_interval(Some(five_seconds))
         .add_service(svc)
         .serve(addr);
 
     tokio::select! {
-        inner = update_handle => inner?,
+        inner = handle => inner?,
         ret = server => ret.map_err(Into::into),
         else => return Err(anyhow::anyhow!("all branches in tokio select are disable but didn't catch anything")),
     }?;
 
     Ok(())
 }
-
