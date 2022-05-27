@@ -1,3 +1,10 @@
+pub mod orderbook {
+    tonic::include_proto!("orderbook");
+}
+
+mod subscribe;
+mod update;
+
 use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
 use std::str::FromStr;
 use structopt::StructOpt;
