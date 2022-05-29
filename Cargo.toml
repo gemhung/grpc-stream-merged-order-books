@@ -4,5 +4,7 @@
 members = [
     "client",
     "server",
+    "binance-client",
+    "bitstamp-client",
 ]
 

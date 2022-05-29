@@ -1,5 +1,5 @@
 use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
-use crate::orderbook::{Data, Level, OrderBook, Summary};
+use crate::orderbook::{Data, OrderBook};
 use tokio::time;
 use tokio::time::Duration;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -41,4 +41,3 @@ pub async fn update(mut client: OrderBookAggregatorClient<Channel>) -> Result<()
         tx.send(s.clone())?;
     }
 }
-

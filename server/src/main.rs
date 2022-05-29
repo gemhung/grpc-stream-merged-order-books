@@ -64,8 +64,8 @@ impl OrderBookAggregator for Context {
 
                 if broadcast.receiver_count() > 0 {
                     if let Err(err) = broadcast.send(summary) {
-                        // this erro is because we broadcasted but there is no active usersa at all
-                        // receiver_count > 0 didn't 100% gurantee to prevent from getting error, so we didn't break here and thus continue
+                        // this erro is because we broadcasted but there is no active users at all
+                        // receiver_count > 0 didn't 100% gurantee to prevent from broadcasting when theres is no active users, so we didn't break here and thus continue
                         warn!(?err);
                     }
                 }
@@ -111,6 +111,29 @@ impl OrderBookAggregator for Context {
     }
 }
 
+fn convert(orderbook: &OrderBook, str: &str) -> (Vec<Level>, Vec<Level>) {
+    (
+        orderbook
+            .asks
+            .iter()
+            .map(|ask| Level {
+                exchange: str.to_string(),
+                price: ask.price,
+                amount: ask.amount,
+            })
+            .collect::<Vec<_>>(),
+        orderbook
+            .bids
+            .iter()
+            .map(|bid| Level {
+                exchange: str.to_string(),
+                price: bid.price,
+                amount: bid.amount,
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
 async fn run_inner(mut rx: mpsc::UnboundedReceiver<Command>) -> Result<(), anyhow::Error> {
     let mut binance = Option::<OrderBook>::None;
     let mut bitstamp = Option::<OrderBook>::None;
@@ -127,23 +150,24 @@ async fn run_inner(mut rx: mpsc::UnboundedReceiver<Command>) -> Result<(), anyho
             }
             Command::Merged(tx) => {
                 let summary = merged.clone().unwrap_or_else(|| {
-                    //let b
+                    // do the merge here
+                    let (asks1, bids1) = binance
+                        .as_ref()
+                        .map(|inner| convert(inner, "binance"))
+                        .unwrap_or_default();
 
+                    let (asks2, bids2) = bitstamp
+                        .as_ref()
+                        .map(|orderbook| convert(orderbook, "bitstamp"))
+                        .unwrap_or_default();
+                    let bids = merge_greater(&bids1, &bids2);
+                    let asks = merge_less(&asks1, &asks2);
                     Summary {
-                        spread: 1.0,
-                        bids: vec![Level {
-                            exchange: "binance".to_string(),
-                            price: match binance {
-                                Some(ref b) => b.bids.first().map(|data| data.price).unwrap_or(1.0),
-                                None => 1.0,
-                            },
-                            amount: 2.0,
-                        }],
-                        asks: vec![Level {
-                            exchange: "binance".to_string(),
-                            price: 1.0,
-                            amount: 2.0,
-                        }],
+                        spread: bids.first().zip(asks.first()).map(
+                            |(Level { price: p1, .. }, Level { price: p2, .. })| (p1 - p2).abs(),
+                        ),
+                        bids,
+                        asks,
                     }
                 });
 
@@ -161,8 +185,6 @@ fn merge_less(v1: &[Level], v2: &[Level]) -> Vec<Level> {
     let mut iter1 = v1.iter().peekable();
     let mut iter2 = v2.iter().peekable();
 
-    //assert!(v1.len() + v2.len() <= usize::MAX);
-
     let mut ret = Vec::with_capacity(v1.len() + v2.len());
 
     loop {
@@ -175,7 +197,7 @@ fn merge_less(v1: &[Level], v2: &[Level]) -> Vec<Level> {
                 ret.push(iter2.next().unwrap().clone());
             }
             _ => {
-                // one of them has finish iterating all values
+                // one of them has finished iterating all values
                 break;
             }
         }
@@ -190,8 +212,6 @@ fn merge_less(v1: &[Level], v2: &[Level]) -> Vec<Level> {
 fn merge_greater(v1: &[Level], v2: &[Level]) -> Vec<Level> {
     let mut iter1 = v1.iter().peekable();
     let mut iter2 = v2.iter().peekable();
-
-    //assert!(v1.len() + v2.len() <= usize::MAX);
 
     let mut ret = Vec::with_capacity(v1.len() + v2.len());
 
@@ -225,11 +245,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let addr = opt.addr.parse()?;
 
     let (broadcast_tx, rx) = broadcast::channel(100000);
-    // drop rx so that it won't pending the receiving queue of broadcast
+    // must drop rx so that it won't pending the receiving queue of broadcast
     drop(rx);
 
     let (tx, rx) = mpsc::unbounded_channel();
-
     let handle = tokio::spawn(run_inner(rx));
 
     let context = Context {

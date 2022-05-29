@@ -12,7 +12,9 @@ pub async fn subscribe(
     let response = client.book_summary(Request::new(Empty::default())).await?;
     let mut res = response.into_inner();
     while let Some(summary) = res.message().await? {
-        info!(?summary);
+        info!(?summary.spread);
+        info!(?summary.bids);
+        info!(?summary.asks);
     }
 
     Result::<(), anyhow::Error>::Ok(())

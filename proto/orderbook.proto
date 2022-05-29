@@ -20,7 +20,7 @@ message Data {
 }
 
 message Summary {
-  double spread = 1;
+  optional double spread = 1;
   repeated Level bids = 2;
   repeated Level asks = 3;
 }

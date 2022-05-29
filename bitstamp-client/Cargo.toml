@@ -1,0 +1,25 @@
+[package]
+name = "bitstamp-client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+tracing = "*"
+tracing-subscriber = "*"
+tokio = { version= "1", features = ["full"] }
+tokio-stream = "0.1"
+tokio-tungstenite = { version="0.17", features = ["native-tls"]}
+futures-util = "*"
+prost = "0.10"
+tonic = { version = "0.7", features = ["tls"] }
+serde = { version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+url = "2.1.0"
+structopt = "0.3"
+
+[build-dependencies]
+tonic-build = "0.7"
+
