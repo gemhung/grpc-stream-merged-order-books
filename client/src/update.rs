@@ -1,5 +1,5 @@
 use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
-use crate::orderbook::{Data, OrderBook};
+use crate::orderbook::OrderBook;
 use tokio::time;
 use tokio::time::Duration;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -11,22 +11,7 @@ pub async fn update(mut client: OrderBookAggregatorClient<Channel>) -> Result<()
     info!("start updating");
     let mut interval = time::interval(Duration::from_millis(1000));
 
-    let mut s = OrderBook {
-        exchange: "binance".to_string(),
-        bids: vec![
-            Data {
-                //exchange: "binance".to_string(),
-                price: 1.24,
-                amount: 1.25,
-            },
-            Data {
-                //exchange: "bitstamp".to_string(),
-                price: 1.24,
-                amount: 1.25,
-            },
-        ],
-        ..Default::default()
-    };
+    let mut s = OrderBook::default();
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 

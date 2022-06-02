@@ -4,19 +4,14 @@ package orderbook;
 
 // Interface exported by the server.
 service OrderBookAggregator {
-  rpc PushOrderbook (stream OrderBook) returns (Empty) {}
+  rpc PushBinance (stream OrderBook) returns (Empty) {}
+  rpc PushBitstamp (stream OrderBook) returns (Empty) {}
   rpc BookSummary(Empty) returns (stream Summary) {}
 }
 
 message OrderBook {
-  string exchange = 1;
-  repeated Data bids = 2;
-  repeated Data asks = 3;
-}
-
-message Data {
-  double price = 1;
-  double amount = 2;
+  repeated Level bids = 2;
+  repeated Level asks = 3;
 }
 
 message Summary {

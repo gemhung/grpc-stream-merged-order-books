@@ -4,7 +4,7 @@ pub mod orderbook {
 mod models;
 
 use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
-use crate::orderbook::{Data, OrderBook};
+use crate::orderbook::OrderBook;
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
 use std::str::FromStr;
@@ -37,12 +37,12 @@ struct Opt {
 impl From<models::BitstampBook> for orderbook::OrderBook {
     fn from(data: models::BitstampBook) -> Self {
         OrderBook {
-            exchange: "bitstamp".to_string(),
             asks: data
                 .asks
                 .into_iter()
                 .take(10)
-                .map(|ask| Data {
+                .map(|ask| orderbook::Level {
+                    exchange: "bitstamp".to_string(),
                     price: ask.price,
                     amount: ask.qty,
                 })
@@ -51,7 +51,8 @@ impl From<models::BitstampBook> for orderbook::OrderBook {
                 .bids
                 .into_iter()
                 .take(10)
-                .map(|bid| Data {
+                .map(|bid| orderbook::Level {
+                    exchange: "bitstamp".to_string(),
                     price: bid.price,
                     amount: bid.qty,
                 })
@@ -75,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let (grpc_tx, grpc_rx) = tokio::sync::mpsc::unbounded_channel();
     let req = Request::new(UnboundedReceiverStream::new(grpc_rx));
     // grpc client streaming
-    client.push_orderbook(req).await?;
+    client.push_bitstamp(req).await?;
     info!("connected ...");
 
     let bitsmap_url = format!("{}", BITSMAP_WS_API,);
@@ -110,7 +111,6 @@ async fn main() -> Result<(), anyhow::Error> {
                 let parsed: models::BitsMap = serde_json::from_str(&str)?;
                 match parsed.data {
                     models::BitstampData::Book(mut inner) => {
-                        
                         inner.bids.truncate(10);
                         inner.asks.truncate(10);
                         if opt.display {

@@ -5,7 +5,7 @@ pub mod orderbook {
 mod models;
 
 use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
-use crate::orderbook::{Data, OrderBook};
+use crate::orderbook::OrderBook;
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
 use std::str::FromStr;
@@ -42,11 +42,11 @@ struct Opt {
 impl From<models::DepthStreamData> for orderbook::OrderBook {
     fn from(data: models::DepthStreamData) -> Self {
         OrderBook {
-            exchange: "binance".to_string(),
             asks: data
                 .asks
                 .into_iter()
-                .map(|ask| Data {
+                .map(|ask| orderbook::Level {
+                    exchange: "binance".to_string(),
                     price: ask.price,
                     amount: ask.qty,
                 })
@@ -54,7 +54,8 @@ impl From<models::DepthStreamData> for orderbook::OrderBook {
             bids: data
                 .bids
                 .into_iter()
-                .map(|bid| Data {
+                .map(|bid| orderbook::Level {
+                    exchange: "binance".to_string(),
                     price: bid.price,
                     amount: bid.qty,
                 })
