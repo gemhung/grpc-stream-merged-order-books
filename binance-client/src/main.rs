@@ -92,7 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let (grpc_tx, grpc_rx) = tokio::sync::mpsc::unbounded_channel();
     let req = Request::new(UnboundedReceiverStream::new(grpc_rx));
     // grpc client streaming
-    client.push_orderbook(req).await?;
+    client.push_binance(req).await?;
     info!("connected ...");
 
     // connect to exchange
