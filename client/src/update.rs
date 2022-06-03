@@ -16,7 +16,7 @@ pub async fn update(mut client: OrderBookAggregatorClient<Channel>) -> Result<()
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
     let req = Request::new(UnboundedReceiverStream::new(rx));
-    let _res = client.push_binance(req).await?;
+    let _res = client.stream_binance(req).await?;
 
     loop {
         interval.tick().await;

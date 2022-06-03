@@ -4,9 +4,9 @@ package orderbook;
 
 // Interface exported by the server.
 service OrderBookAggregator {
-  rpc PushBinance (stream OrderBook) returns (Empty) {}
-  rpc PushBitstamp (stream OrderBook) returns (Empty) {}
-  rpc BookSummary(Empty) returns (stream Summary) {}
+  rpc StreamBinance (stream OrderBook) returns (Empty) {}
+  rpc StreamBitstamp (stream OrderBook) returns (Empty) {}
+  rpc SubscribeSummary(Empty) returns (stream Summary) {}
 }
 
 message OrderBook {

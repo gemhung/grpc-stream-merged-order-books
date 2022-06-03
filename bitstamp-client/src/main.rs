@@ -76,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let (grpc_tx, grpc_rx) = tokio::sync::mpsc::unbounded_channel();
     let req = Request::new(UnboundedReceiverStream::new(grpc_rx));
     // grpc client streaming
-    client.push_bitstamp(req).await?;
+    client.stream_bitstamp(req).await?;
     info!("connected ...");
 
     let bitsmap_url = format!("{}", BITSMAP_WS_API,);
@@ -95,6 +95,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let (mut write, mut read) = socket.split();
     // subscribe
     write.send(serde_json::to_vec(&subscribe)?.into()).await?;
+    // check if successful subscribe
+    match read.next().await {
+        Some(Ok(msg)) => info!(?msg),
+        Some(err) => err.map(|_| ())?,
+        _ => Err(anyhow::anyhow!(
+            "unexpected none value, channel maybe closed"
+        ))?,
+    }
 
     // So read and write will be in different tokio tasks
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -110,9 +118,7 @@ async fn main() -> Result<(), anyhow::Error> {
             Message::Text(str) => {
                 let parsed: models::BitsMap = serde_json::from_str(&str)?;
                 match parsed.data {
-                    models::BitstampData::Book(mut inner) => {
-                        inner.bids.truncate(10);
-                        inner.asks.truncate(10);
+                    models::BitstampData::Book(inner) => {
                         if opt.display {
                             info!(?inner.bids);
                             info!(?inner.asks);
