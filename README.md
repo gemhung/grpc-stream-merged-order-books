@@ -26,11 +26,11 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 2. run binance with symbol "ethbtc" and display received orderbook with decimal point up to 6  
 ```bash
-    cargo run --release --bin --binance-client -- --symbol "ethbtc" --display  -p 6
+    cargo run --release --bin binance-client -- --symbol "ethbtc" --display  -p 6
 ```
 3. run bitstamp with symbol "ethbtc" and display received orderbook with decimal point up to 6  
 ```bash
-    cargo run --release --bin --bitstamp-client -- --symbol "ethbtc" --display  -p 6
+    cargo run --release --bin bitstamp-client -- --symbol "ethbtc" --display  -p 6
 ```
 4. run subscribe
 ```bash
