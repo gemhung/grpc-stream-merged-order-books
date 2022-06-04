@@ -6,4 +6,4 @@ stages:
 rust:
   stage: build
   script:
-    - cargo build --verbose
+    - cargo build
