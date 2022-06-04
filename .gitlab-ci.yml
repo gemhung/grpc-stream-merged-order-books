@@ -6,4 +6,5 @@ stages:
 rust:
   stage: build
   script:
+    - apt-get install -y protobuf-compiler
     - cargo build
