@@ -39,9 +39,11 @@ Getting order books from binance and bitstamp and forward them to inner grpc-ser
 ```
 
 ## Roadmap
-1. Users can subscrie from different exchanges
+1. Users can subscrie from different exchanges (knapsack algo perhaps)
 2. Support other exchanges
-3. Minor:
+3. Graceful shutdown
+4. Performance test
+5. Minor:
     - CI
     - Dockerize
     - Merge binance-client and bitstamp-client cause they shared most of implementation logic
