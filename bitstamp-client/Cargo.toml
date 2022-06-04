@@ -19,6 +19,7 @@ serde = { version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 url = "2.1.0"
 structopt = "0.3"
+prettytable-rs = "*"
 
 [build-dependencies]
 tonic-build = "0.7"

@@ -7,6 +7,7 @@ use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
 use crate::orderbook::OrderBook;
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
+use prettytable::{color, format::Alignment, Attr, Cell, Row, Table};
 use std::str::FromStr;
 use structopt::StructOpt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -22,7 +23,7 @@ use url::Url;
 const BITSMAP_WS_API: &str = "wss://ws.bitstamp.net";
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "bitstamp client", about = "An example of StructOpt usage.")]
+#[structopt(name = "bitstamp client", about = "Receive market data")]
 struct Opt {
     #[structopt(short, long, default_value = "btcusdt")]
     symbol: String,
@@ -32,8 +33,12 @@ struct Opt {
 
     #[structopt(short, long)]
     display: bool,
+
+    #[structopt(short, long, default_value = "6")]
+    point: usize,
 }
 
+// convert to grpc acceptable data format
 impl From<models::BitstampBook> for orderbook::OrderBook {
     fn from(data: models::BitstampBook) -> Self {
         OrderBook {
@@ -59,6 +64,80 @@ impl From<models::BitstampBook> for orderbook::OrderBook {
                 .collect::<Vec<_>>(),
         }
     }
+}
+
+// clear screen
+fn cls() {
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+}
+
+fn display(book: &OrderBook, point: usize, symbol: &str) {
+    let fmt = |f: &f64| format!("{0:>.1$}", f, point);
+    let mut table = Table::new();
+    table.set_titles(Row::new(vec![Cell::new_align(
+        &("bitstamp".to_string() + "(" + symbol + ")"),
+        Alignment::CENTER,
+    )
+    .with_hspan(6)]));
+    table.add_row(Row::new(vec![
+        Cell::new_align("bids", Alignment::CENTER).with_hspan(3),
+        Cell::new_align("asks", Alignment::CENTER).with_hspan(3),
+    ]));
+
+    table.add_row(Row::new(vec![
+        Cell::new_align("total", Alignment::CENTER),
+        Cell::new_align("amount", Alignment::CENTER),
+        Cell::new_align("price", Alignment::CENTER),
+        Cell::new_align("price", Alignment::CENTER),
+        Cell::new_align("amount", Alignment::CENTER),
+        Cell::new_align("total", Alignment::CENTER),
+    ]));
+
+    let mut bids_iter = book.bids.iter().take(10);
+    let mut asks_iter = book.asks.iter().take(10).rev();
+
+    // add asks columns
+    while let Some(inner) = asks_iter.next() {
+        table.add_row(Row::new(vec![
+            Cell::new_align("", Alignment::LEFT).with_hspan(3),
+            Cell::new_align(&fmt(&inner.price), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::RED)),
+            Cell::new_align(&fmt(&inner.amount), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::RED)),
+            Cell::new_align(&fmt(&(&inner.amount * &inner.price)), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::RED)),
+        ]));
+    }
+
+    // add spread
+    table.add_row(Row::new(vec![Cell::new_align(
+        (book
+            .bids
+            .first()
+            .zip(book.asks.first())
+            .map(|(b, a)| fmt(&(b.price - a.price).abs()))
+            .unwrap_or_else(|| "None".to_string())
+            + "(spread)")
+            .as_str(),
+        Alignment::CENTER,
+    )
+    .with_hspan(6)]));
+
+    // add bids columns
+    while let Some(inner) = bids_iter.next() {
+        table.add_row(Row::new(vec![
+            Cell::new_align(&fmt(&(&inner.amount * &inner.price)), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::GREEN)),
+            Cell::new_align(&fmt(&inner.amount), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::GREEN)),
+            Cell::new_align(&fmt(&inner.price), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::GREEN)),
+            Cell::new_align("", Alignment::LEFT).with_hspan(2),
+        ]));
+    }
+
+    cls();
+    table.printstd();
 }
 
 #[tokio::main]
@@ -113,17 +192,18 @@ async fn main() -> Result<(), anyhow::Error> {
         Result::<_, anyhow::Error>::Ok(())
     });
 
+    // core process to receive market data
     while let Some(msg) = read.next().await {
         match msg? {
             Message::Text(str) => {
                 let parsed: models::BitsMap = serde_json::from_str(&str)?;
                 match parsed.data {
                     models::BitstampData::Book(inner) => {
+                        let r: orderbook::OrderBook = inner.into();
                         if opt.display {
-                            info!(?inner.bids);
-                            info!(?inner.asks);
+                            display(&r, opt.point, opt.symbol.as_str());
                         }
-                        grpc_tx.send(inner.into())?;
+                        grpc_tx.send(r)?;
                     }
                     _ => {
                         warn!(uknown_received=?str);

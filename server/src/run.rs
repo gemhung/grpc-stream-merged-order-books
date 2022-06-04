@@ -85,6 +85,7 @@ pub async fn run_inner(mut rx: mpsc::UnboundedReceiver<Command>) -> Result<(), a
                     let mut asks = merge::merge_less(&[asks1, asks2]);
                     bids.truncate(10);
                     asks.truncate(10);
+                    // empty orderbook for clean up
                     Summary {
                         spread: bids.first().zip(asks.first()).map(
                             |(Level { price: p1, .. }, Level { price: p2, .. })| (p1 - p2).abs(),
@@ -93,6 +94,7 @@ pub async fn run_inner(mut rx: mpsc::UnboundedReceiver<Command>) -> Result<(), a
                         asks,
                     }
                 });
+                //
 
                 if let Err(err) = tx.send(summary) {
                     error!(?err);
@@ -125,4 +127,3 @@ pub async fn run_subscribe(
         }
     }
 }
-

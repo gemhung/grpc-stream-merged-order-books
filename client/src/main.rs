@@ -28,6 +28,10 @@ struct Opt {
     /// cargo run -- --update "8743.T"
     #[structopt(short, long, conflicts_with = "subscribe")]
     update: bool,
+
+    /// decimal point
+    #[structopt(short, long, default_value = "6")]
+    point: usize,
 }
 
 #[tokio::main]
@@ -47,7 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
         // subscribe to get ohlc
         Opt {
             subscribe: true, ..
-        } => subscribe(client).await?,
+        } => subscribe(client, opt.point).await?,
 
         // update ohlc using file data
         Opt { update: true, .. } => update(client).await?,

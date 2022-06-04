@@ -8,6 +8,7 @@ use crate::orderbook::order_book_aggregator_client::OrderBookAggregatorClient;
 use crate::orderbook::OrderBook;
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
+use prettytable::{color, format::Alignment, Attr, Cell, Row, Table};
 use std::str::FromStr;
 use structopt::StructOpt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -37,6 +38,9 @@ struct Opt {
 
     #[structopt(short, long)]
     display: bool,
+
+    #[structopt(short, long, default_value = "6")]
+    point: usize,
 }
 
 impl From<models::DepthStreamData> for orderbook::OrderBook {
@@ -62,6 +66,81 @@ impl From<models::DepthStreamData> for orderbook::OrderBook {
                 .collect::<Vec<_>>(),
         }
     }
+}
+
+// clear screen
+fn cls() {
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+}
+
+fn display(book: &OrderBook, decimal_point: usize, symbol: &str) {
+    let fmt = |f: &f64| format!("{:>.1$}", f, decimal_point);
+
+    let mut table = Table::new();
+    table.set_titles(Row::new(vec![Cell::new_align(
+        &("binance".to_string() + "(" + symbol + ")"),
+        Alignment::CENTER,
+    )
+    .with_hspan(6)]));
+    table.add_row(Row::new(vec![
+        Cell::new_align("bids", Alignment::CENTER).with_hspan(3),
+        Cell::new_align("asks", Alignment::CENTER).with_hspan(3),
+    ]));
+
+    table.add_row(Row::new(vec![
+        Cell::new_align("total", Alignment::CENTER),
+        Cell::new_align("amount", Alignment::CENTER),
+        Cell::new_align("price", Alignment::CENTER),
+        Cell::new_align("price", Alignment::CENTER),
+        Cell::new_align("amount", Alignment::CENTER),
+        Cell::new_align("total", Alignment::CENTER),
+    ]));
+
+    let mut bids_iter = book.bids.iter().take(10);
+    let mut asks_iter = book.asks.iter().take(10).rev();
+
+    // add asks columns
+    while let Some(inner) = asks_iter.next() {
+        table.add_row(Row::new(vec![
+            Cell::new_align("", Alignment::LEFT).with_hspan(3),
+            Cell::new_align(&fmt(&inner.price), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::RED)),
+            Cell::new_align(&fmt(&inner.amount), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::RED)),
+            Cell::new_align(&fmt(&(&inner.amount * &inner.price)), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::RED)),
+        ]));
+    }
+
+    // add spread
+    table.add_row(Row::new(vec![Cell::new_align(
+        (book
+            .bids
+            .first()
+            .zip(book.asks.first())
+            .map(|(b, a)| fmt(&(b.price - a.price).abs()))
+            .unwrap_or_else(|| "None".to_string())
+            + "(spread)")
+            .as_str(),
+        Alignment::CENTER,
+    )
+    .with_hspan(6)]));
+
+    // add bids columns
+    while let Some(inner) = bids_iter.next() {
+        table.add_row(Row::new(vec![
+            Cell::new_align(&fmt(&(&inner.amount * &inner.price)), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::GREEN)),
+            Cell::new_align(&fmt(&inner.amount), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::GREEN)),
+            Cell::new_align(&fmt(&inner.price), Alignment::RIGHT)
+                .with_style(Attr::ForegroundColor(color::GREEN)),
+            Cell::new_align("", Alignment::LEFT).with_hspan(2),
+        ]));
+    }
+
+    cls();
+    table.printstd();
 }
 
 #[tokio::main]
@@ -121,12 +200,12 @@ async fn main() -> Result<(), anyhow::Error> {
         match msg? {
             Message::Text(str) => {
                 let parsed: models::DepthStreamData = serde_json::from_str(&str)?;
+                let orderbook: OrderBook = parsed.into();
                 if opt.display {
-                    info!(?parsed.bids);
-                    info!(?parsed.asks);
+                    display(&orderbook, opt.point, opt.symbol.as_str())
                 }
                 // forward to grpc
-                grpc_tx.send(parsed.into())?;
+                grpc_tx.send(orderbook)?;
             }
             Message::Ping(p) => {
                 info!("Ping message received! {:?}", String::from_utf8_lossy(&p));
