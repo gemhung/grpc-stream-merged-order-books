@@ -2,16 +2,17 @@
 
 ![image.png](./image.png)
 
-## Keywords
+## Keyword
 ```
-websocket, grpc, tokio, tungstenite, tonic, serde, tracing, anyhow
+cryptocurrency, orderbook, spread, binance, bitstamp,
+rust, cli, websocket, grpc, tokio, tungstenite, tonic, serde, tracing, anyhow
 ```
 ## What is this project doing ?
 Getting order books from binance and bitstamp and forward them to inner grpc-server. One then can subscribe from grpc to see a merged summary of those orderbooks 
 
 ## Download project
 ```bash
-    git clone https://gitlab.com/it-is-not-possible.-no-it-is-necessary/grpc-stream-merged-order-books.git. 
+    git clone https://gitlab.com/it-is-not-possible.-no-it-is-necessary/grpc-stream-merged-order-books.git
 ```
 
 # Install Rust
