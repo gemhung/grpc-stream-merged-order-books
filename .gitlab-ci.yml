@@ -1,0 +1,9 @@
+image: rust:latest
+
+stages:
+  - build
+
+rust:
+  stage: build
+  script:
+    - cargo build --verbose
