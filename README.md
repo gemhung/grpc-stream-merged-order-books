@@ -16,7 +16,7 @@ Getting order books from binance and bitstamp and forward them to inner grpc-ser
 
 # Install Rust
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 ## How to run
